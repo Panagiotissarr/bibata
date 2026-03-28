@@ -1,6 +1,41 @@
 ## Disclamer 
 This is not my work this is just a maintenied clone of this project.
 All of the the assets used are not mine every piece is owned by Abdulkaiz Khatri.
+
+# Running
+To run bibata localy you will need to do the following
+  
+  ```terminal
+  # clone the repo
+  git clone https://github.com/Panagiotissarr/bibata.git
+  ```
+
+  ```terminal
+  # Install all dependencies for the app
+  npm install
+  ```
+
+  ```terminal
+  # Run app
+  npm run dev
+  ```
+
+
+<details>
+  <summary>Bored? one copy liner command avalible.</summary>
+  
+  ```terminal
+  # clone the repo
+  git clone https://github.com/Panagiotissarr/bibata.git
+  # Install all dependencies for the app
+  npm install
+  # Run app
+  npm run dev
+  ```
+</details>
+
+Now you should be able to vist `http://localhost:3000` in your browser
+
 ## Bibata
 
 TLDR; This cursor set is a masterpiece of cursors available on the internet, hand-designed by [Abdulkaiz Khatri](https://github.com/ful1e5).
