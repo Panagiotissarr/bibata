@@ -1,5 +1,8 @@
 {
-  "/api/core/session/route": "app/api/core/session/route.js",
+  "/api/core/upload/route": "app/api/core/upload/route.js",
+  "/api/db/download/store/route": "app/api/db/download/store/route.js",
+  "/api/core/download/route": "app/api/core/download/route.js",
   "/api/svg/route": "app/api/svg/route.js",
+  "/api/core/session/route": "app/api/core/session/route.js",
   "/(home)/studio/page": "app/(home)/studio/page.js"
 }
