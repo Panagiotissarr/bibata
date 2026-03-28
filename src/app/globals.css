@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-dark: #141414;
+  --bg-light: #ffffff;
+  --accent: #d2defc;
+  --accent-active: #8aa8f2;
+
+  --gradient-light: linear-gradient(
+    to_right,
+    theme(colors.fuchsia.100),
+    theme(colors.green.100),
+    theme(colors.orange.100),
+    theme(colors.red.100),
+    theme(colors.blue.100),
+    theme(colors.fuchsia.100)
+  );
+
+  --gradient-strong: linear-gradient(
+    to_right,
+    theme(colors.fuchsia.300),
+    theme(colors.green.300),
+    theme(colors.orange.300),
+    theme(colors.red.300),
+    theme(colors.blue.300),
+    theme(colors.fuchsia.300)
+  );
+
+  --text-dark: #ffffff;
+  --text-light: #000000;
+}
+
+/** Remove Tap highlight from buttons **/
+
+.copyrightA{
+  text-align: right;
+}
+
+
+
+* {
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+}
+
+.dark {
+  background-color: var(--bg-dark);
+  color: var(--text-dark);
+}
+
+.light {
+  background-color: var(--bg-light);
+  color: var(--text-light);
+}
+
+.clip-bottom {
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
+.flex-center {
+  @apply flex items-center justify-center;
+}
+
+.remove-arrow::-webkit-inner-spin-button,
+.remove-arrow::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.remove-arrow {
+  -moz-appearance: textfield;
+}

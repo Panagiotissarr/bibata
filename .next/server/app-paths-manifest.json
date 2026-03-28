@@ -1,0 +1,5 @@
+{
+  "/api/core/session/route": "app/api/core/session/route.js",
+  "/api/svg/route": "app/api/svg/route.js",
+  "/(home)/studio/page": "app/(home)/studio/page.js"
+}
