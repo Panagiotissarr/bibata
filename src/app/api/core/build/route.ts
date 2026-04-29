@@ -326,42 +326,94 @@ sudo rm /usr/share/icons/Bibata-*     # Remove from all users
 const WIN_README = README_TEXT + WIN_INSTALL_TEXT;
 const X_README = README_TEXT + X_INSTALL_TEXT;
 
-const generateWinInstallIni = (themeName: string, cursorData: { name: string; frames: string[] }[]): string => {
-  const lines = [
-    '[Version]',
-    'signature="$CHICAGO$"',
-    '',
-    '[DefaultInstall]',
-    'CopyFiles = Bibata.Cursors',
-    'AddReg    = Bibata.Reg',
-    '',
-    '[DestinationDirs]',
-    'Bibata.Cursors = 10,Cursors',
-    '',
-    '[Bibata.Cursors]',
+const generateWinInstallInf = (themeName: string, cursorData: { name: string; frames: string[] }[]): string => {
+  const cursorDir = `Cursors\\${themeName}`;
+
+  type CursorRole = {
+    regKey: string;
+    bibataName: string;
+  };
+
+  const roles: CursorRole[] = [
+    { regKey: 'Arrow', bibataName: 'left_ptr' },
+    { regKey: 'Help', bibataName: 'question_arrow' },
+    { regKey: 'AppStarting', bibataName: 'left_ptr_watch' },
+    { regKey: 'Wait', bibataName: 'wait' },
+    { regKey: 'Crosshair', bibataName: 'crosshair' },
+    { regKey: 'IBeam', bibataName: 'xterm' },
+    { regKey: 'NWPen', bibataName: 'pencil' },
+    { regKey: 'No', bibataName: 'circle' },
+    { regKey: 'SizeNS', bibataName: 'sb_v_double_arrow' },
+    { regKey: 'SizeWE', bibataName: 'sb_h_double_arrow' },
+    { regKey: 'SizeNWSE', bibataName: 'bd_double_arrow' },
+    { regKey: 'SizeNESW', bibataName: 'fd_double_arrow' },
+    { regKey: 'SizeAll', bibataName: 'move' },
+    { regKey: 'UpArrow', bibataName: 'sb_up_arrow' },
+    { regKey: 'Hand', bibataName: 'hand2' },
+    { regKey: 'Person', bibataName: 'person' },
+    { regKey: 'Pin', bibataName: 'pin' },
   ];
 
-  const schemePaths: string[] = [];
-  const seen = new Set<string>();
+  const seenFiles = new Set<string>();
+  const fileEntries: string[] = [];
+  const stringEntries: Record<string, string> = {
+    INF_Provider: 'Bibata',
+    CUR_DIR: cursorDir,
+    SCHEME_NAME: themeName,
+  };
 
-  for (const { name: cursorName, frames } of cursorData) {
-    const config = configs[cursorName];
+  const schemePaths: string[] = [];
+  const wregLines: string[] = [];
+
+  for (const role of roles) {
+    const cursor = cursorData.find((c) => c.name === role.bibataName);
+    if (!cursor) continue;
+
+    const config = configs[cursor.name];
     if (!config?.winname) continue;
 
-    const ext = frames.length > 1 ? '.ani' : '.cur';
-    const winName = config.winname;
+    const ext = cursor.frames.length > 1 ? '.ani' : '.cur';
+    const fileName = `${config.winname}${ext}`;
+    const varName = role.regKey.toLowerCase();
 
-    if (!seen.has(winName)) {
-      lines.push(`"${winName}${ext}"`);
-      seen.add(winName);
+    stringEntries[varName] = fileName;
+
+    if (!seenFiles.has(fileName)) {
+      fileEntries.push(`"${fileName}"`);
+      seenFiles.add(fileName);
     }
-    schemePaths.push(`%10%\\Cursors\\${winName}${ext}`);
+
+    schemePaths.push(`%10%\\%CUR_DIR%\\%${varName}%`);
+    wregLines.push(`HKCU,"Control Panel\\Cursors",${role.regKey},0x00020000,"%10%\\%CUR_DIR%\\%${varName}%"`);
   }
 
-  lines.push('');
-  lines.push('[Bibata.Reg]');
-  lines.push(`HKCU,"Control Panel\\Cursors\\Schemes","${themeName}",,"${schemePaths.join(',')}"`);
-  lines.push('');
+  const lines = [
+    '[Version]',
+    'signature="$Windows NT$"',
+    'provider=%INF_Provider%',
+    '',
+    '[DefaultInstall]',
+    'CopyFiles = Scheme.Cur',
+    'AddReg    = Scheme.Reg,Wreg',
+    '',
+    '[DestinationDirs]',
+    'Scheme.Cur = 10,"%CUR_DIR%"',
+    '',
+    '[Scheme.Reg]',
+    `HKCU,"Control Panel\\Cursors\\Schemes","%SCHEME_NAME%",,"${schemePaths.join(',')}"`,
+    '',
+    '[Wreg]',
+    `HKCU,"Control Panel\\Cursors",,0x00020000,"%SCHEME_NAME%"`,
+    ...wregLines,
+    `HKLM,"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Runonce\\Setup\\","",,"rundll32.exe shell32.dll,Control_RunDLL main.cpl @0,1"`,
+    '',
+    '[Scheme.Cur]',
+    ...fileEntries,
+    '',
+    '[Strings]',
+    ...Object.entries(stringEntries).map(([key, value]) => `${key.padEnd(16)}= "${value}"`),
+    '',
+  ];
 
   return lines.join('\r\n');
 };
@@ -456,7 +508,7 @@ export async function POST(request: NextRequest) {
     if (platform === 'win') {
       archiveFiles.push({
         name: 'Cursors/install.inf',
-        data: Buffer.from(generateWinInstallIni(name, cursors), 'utf8'),
+        data: Buffer.from(generateWinInstallInf(name, cursors), 'utf8'),
       });
     }
 
