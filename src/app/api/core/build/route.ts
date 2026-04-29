@@ -367,7 +367,7 @@ const generateWinInstallInf = (themeName: string, cursorData: { name: string; fr
 
   for (const role of roles) {
     const cursor = cursorData.find((c) => c.name === role.bibataName);
-    if (!cursor) continue;
+    if (!cursor || cursor.frames.length === 0) continue;
 
     const config = configs[cursor.name];
     if (!config?.winname) continue;
