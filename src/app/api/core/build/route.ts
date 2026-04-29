@@ -326,6 +326,46 @@ sudo rm /usr/share/icons/Bibata-*     # Remove from all users
 const WIN_README = README_TEXT + WIN_INSTALL_TEXT;
 const X_README = README_TEXT + X_INSTALL_TEXT;
 
+const generateWinInstallIni = (themeName: string, cursorNames: string[]): string => {
+  const lines = [
+    '[Version]',
+    'signature="$CHICAGO$"',
+    '',
+    '[DefaultInstall]',
+    'CopyFiles = Bibata.Cursors',
+    'AddReg    = Bibata.Reg',
+    '',
+    '[DestinationDirs]',
+    'Bibata.Cursors = 10,Cursors',
+    '',
+    '[Bibata.Cursors]',
+  ];
+
+  const schemePaths: string[] = [];
+  const seen = new Set<string>();
+
+  for (const cursorName of cursorNames) {
+    const config = configs[cursorName];
+    if (!config?.winname) continue;
+
+    const ext = '.ani';
+    const winName = config.winname;
+
+    if (!seen.has(winName)) {
+      lines.push(`"${winName}${ext}"`);
+      seen.add(winName);
+    }
+    schemePaths.push(`%10%\\Cursors\\${winName}${ext}`);
+  }
+
+  lines.push('');
+  lines.push('[Bibata.Reg]');
+  lines.push(`HKCU,"Control Panel\\Cursors\\Schemes","${themeName}",,"${schemePaths.join(',')}"`);
+  lines.push('');
+
+  return lines.join('\r\n');
+};
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json() as BuildPayload;
@@ -372,10 +412,10 @@ export async function POST(request: NextRequest) {
       if (platform === 'win' && config.winname) {
         if (frames.length === 1) {
           const curData = await createCurFile(frames[0], size, config.x ?? 0, config.y ?? 0);
-          archiveFiles.push({ name: `${config.winname}.cur`, data: curData });
+          archiveFiles.push({ name: `Cursors/${config.winname}.cur`, data: curData });
         } else {
           const aniData = await createAniFile(frames, size, config.x ?? 0, config.y ?? 0, delay);
-          archiveFiles.push({ name: `${config.winname}.ani`, data: aniData });
+          archiveFiles.push({ name: `Cursors/${config.winname}.ani`, data: aniData });
         }
       }
 
@@ -406,11 +446,19 @@ export async function POST(request: NextRequest) {
     }
 
     const readmeContent = platform === 'win' ? WIN_README : platform === 'x11' ? X_README : README_TEXT;
-    archiveFiles.push({ name: 'README.txt', data: Buffer.from(readmeContent, 'utf8') });
+    archiveFiles.push({ name: 'README.md', data: Buffer.from(readmeContent, 'utf8') });
+
     archiveFiles.push({
       name: 'VERSION',
       data: Buffer.from(`ID=cursor-build\nAuthor=Abdualkaiz Khatri <kaizmandhu@gmail.com>\nType=${name}\nVersion=${version}`, 'utf8'),
     });
+
+    if (platform === 'win') {
+      archiveFiles.push({
+        name: 'Cursors/install.ini',
+        data: Buffer.from(generateWinInstallIni(name, cursors.map((c) => c.name)), 'utf8'),
+      });
+    }
 
     const archiveData = platform === 'x11'
       ? await createTarGzArchive(archiveFiles)
