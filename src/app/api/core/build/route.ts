@@ -109,6 +109,108 @@ const rconfigs: Record<string, CursorConfig> = {
   pin: { x: 207, y: 24, winname: 'Pin' },
 };
 
+const createCurFile = async (frame: Buffer, size: number, x: number, y: number): Promise<Buffer> => {
+  const pngData = await resizePng(frame, size);
+
+  const header = Buffer.alloc(6);
+  header.writeUInt16LE(0, 0); // reserved
+  header.writeUInt16LE(2, 2); // type: 2 = cursor
+  header.writeUInt16LE(1, 4); // number of images
+
+  const entry = Buffer.alloc(16);
+  entry.writeUInt8(size >= 256 ? 0 : size, 0); // width
+  entry.writeUInt8(size >= 256 ? 0 : size, 1); // height
+  entry.writeUInt8(0, 2); // color palette
+  entry.writeUInt8(0, 3); // reserved
+  entry.writeUInt16LE(x, 4); // hotspot x
+  entry.writeUInt16LE(y, 5); // hotspot y
+  entry.writeUInt32LE(pngData.length, 8); // size of image data
+  entry.writeUInt32LE(22, 12); // offset to image data (6 + 16)
+
+  return Buffer.concat([header, entry, pngData]);
+};
+
+const createAniFile = async (frames: Buffer[], size: number, x: number, y: number, delay: number): Promise<Buffer> => {
+  const curFrames = await Promise.all(frames.map((f) => createCurFile(f, size, x, y)));
+
+  const rateTable = Buffer.alloc(4 * frames.length);
+  const jiffies = Math.round(delay / (1000 / 60));
+  for (let i = 0; i < frames.length; i++) {
+    rateTable.writeUInt32LE(jiffies, i * 4);
+  }
+
+  const seqTable = Buffer.alloc(4 * frames.length);
+  for (let i = 0; i < frames.length; i++) {
+    seqTable.writeUInt32LE(i, i * 4);
+  }
+
+  const anihHeader = Buffer.alloc(36);
+  anihHeader.writeUInt32LE(36, 0); // header size
+  anihHeader.writeUInt32LE(frames.length, 4); // total frames
+  anihHeader.writeUInt32LE(frames.length, 8); // steps
+  anihHeader.writeUInt32LE(size, 12); // width
+  anihHeader.writeUInt32LE(size, 16); // height
+  anihHeader.writeUInt32LE(0, 20); // bit count
+  anihHeader.writeUInt32LE(0, 24); // planes
+  anihHeader.writeUInt32LE(jiffies, 28); // frame rate
+  anihHeader.writeUInt32LE(1, 32); // flags: AF_ICON = 1
+
+  const framListChunks: Buffer[] = [];
+  for (const cur of curFrames) {
+    const iconHeader = Buffer.alloc(4);
+    iconHeader.write('icon', 0, 'ascii');
+    iconHeader.writeUInt32LE(cur.length, 4);
+    framListChunks.push(iconHeader, cur);
+  }
+  const framListContent = Buffer.concat(framListChunks);
+
+  const framListHeader = Buffer.alloc(8);
+  framListHeader.write('LIST', 0, 'ascii');
+  framListHeader.writeUInt32LE(4 + framListContent.length, 4);
+  const framListType = Buffer.alloc(4);
+  framListType.write('fram', 0, 'ascii');
+
+  const rateChunk = Buffer.alloc(8);
+  rateChunk.write('rate', 0, 'ascii');
+  rateChunk.writeUInt32LE(rateTable.length, 4);
+
+  const seqChunk = Buffer.alloc(8);
+  seqChunk.write('seq ', 0, 'ascii');
+  seqChunk.writeUInt32LE(seqTable.length, 4);
+
+  const anihChunk = Buffer.alloc(8);
+  anihChunk.write('anih', 0, 'ascii');
+  anihChunk.writeUInt32LE(anihHeader.length, 4);
+
+  const infoContent = Buffer.concat([
+    (() => { const b = Buffer.alloc(5 + 4); b.write('INAM', 0, 'ascii'); b.writeUInt32LE(1, 4); b[8] = 0; return b; })(),
+    (() => { const b = Buffer.alloc(5 + 4); b.write('IART', 0, 'ascii'); b.writeUInt32LE(1, 4); b[8] = 0; return b; })(),
+  ]);
+  const infoListHeader = Buffer.alloc(8);
+  infoListHeader.write('LIST', 0, 'ascii');
+  infoListHeader.writeUInt32LE(4 + infoContent.length, 4);
+  const infoListType = Buffer.alloc(4);
+  infoListType.write('INFO', 0, 'ascii');
+
+  const riffType = Buffer.alloc(4);
+  riffType.write('ACON', 0, 'ascii');
+
+  const content = Buffer.concat([
+    riffType,
+    infoListHeader, infoListType, infoContent,
+    anihChunk, anihHeader,
+    rateChunk, rateTable,
+    seqChunk, seqTable,
+    framListHeader, framListType, framListContent,
+  ]);
+
+  const riffHeader = Buffer.alloc(8);
+  riffHeader.write('RIFF', 0, 'ascii');
+  riffHeader.writeUInt32LE(content.length, 4);
+
+  return Buffer.concat([riffHeader, content]);
+};
+
 const resizePng = async (frame: Buffer, size: number): Promise<Buffer> => {
   return sharp(frame).resize(size, size, {
     fit: 'contain',
@@ -269,15 +371,11 @@ export async function POST(request: NextRequest) {
 
       if (platform === 'win' && config.winname) {
         if (frames.length === 1) {
-          const pngData = await resizePng(frames[0], size);
-          archiveFiles.push({ name: `${config.winname}.cur`, data: pngData });
+          const curData = await createCurFile(frames[0], size, config.x ?? 0, config.y ?? 0);
+          archiveFiles.push({ name: `${config.winname}.cur`, data: curData });
         } else {
-          const maxDigits = String(frames.length).length;
-          for (let i = 0; i < frames.length; i++) {
-            const index = String(i + 1).padStart(maxDigits, '0');
-            const pngData = await resizePng(frames[i], size);
-            archiveFiles.push({ name: `${config.winname}-${index}.png`, data: pngData });
-          }
+          const aniData = await createAniFile(frames, size, config.x ?? 0, config.y ?? 0, delay);
+          archiveFiles.push({ name: `${config.winname}.ani`, data: aniData });
         }
       }
 
