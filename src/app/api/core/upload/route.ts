@@ -1,13 +1,14 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 
+import { PrismaClient } from '@prisma/client';
+
 import {
   CORE_SESSION_COOKIE,
   createBuildSessionId,
   HOSTED_PACKAGING_ERROR,
   isHostedPackagingDisabled,
   type CursorBuildPayload,
-  uploadCursorFrames
 } from '@utils/local-core';
 
 export const runtime = 'nodejs';
@@ -15,14 +16,16 @@ export const runtime = 'nodejs';
 const cookieOptions = {
   httpOnly: true,
   path: '/',
-  sameSite: 'lax' as const
+  sameSite: 'lax' as const,
 };
+
+const prisma = new PrismaClient();
 
 export async function POST(request: NextRequest) {
   if (isHostedPackagingDisabled()) {
     return NextResponse.json(
       { id: null, files: [], error: [HOSTED_PACKAGING_ERROR] },
-      { status: 503 }
+      { status: 503 },
     );
   }
 
@@ -30,7 +33,7 @@ export async function POST(request: NextRequest) {
   if (!rawBody) {
     return NextResponse.json(
       { id: null, files: [], error: ['Upload payload is empty.'] },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -41,7 +44,7 @@ export async function POST(request: NextRequest) {
   } catch {
     return NextResponse.json(
       { id: null, files: [], error: ['Upload payload is not valid JSON.'] },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -50,16 +53,38 @@ export async function POST(request: NextRequest) {
   const buildId = existing || createBuildSessionId();
 
   try {
-    const result = await uploadCursorFrames(buildId, payload);
-    const response = NextResponse.json(result, {
-      status: result.error ? 400 : 200
+    await prisma.cursorBuild.upsert({
+      where: { id: buildId },
+      create: {
+        id: buildId,
+        name: payload.name,
+        platform: payload.platform,
+        size: payload.size,
+        delay: payload.delay,
+        mode: payload.mode,
+        frames: payload.frames,
+      },
+      update: {
+        name: payload.name,
+        platform: payload.platform,
+        size: payload.size,
+        delay: payload.delay,
+        mode: payload.mode,
+        frames: payload.frames,
+      },
+    });
+
+    const response = NextResponse.json({
+      id: buildId,
+      files: [payload.name],
+      error: null,
     });
 
     if (!existing) {
       response.cookies.set({
         name: CORE_SESSION_COOKIE,
         value: buildId,
-        ...cookieOptions
+        ...cookieOptions,
       });
     }
 
@@ -70,7 +95,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(
       { id: buildId, files: [], error: [message] },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

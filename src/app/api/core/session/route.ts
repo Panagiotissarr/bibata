@@ -1,27 +1,30 @@
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
+import { PrismaClient } from '@prisma/client';
+
 import {
   CORE_SESSION_COOKIE,
   createBuildSessionId,
-  destroyBuildArtifacts,
   HOSTED_PACKAGING_ERROR,
-  isHostedPackagingDisabled
+  isHostedPackagingDisabled,
 } from '@utils/local-core';
 
 export const runtime = 'nodejs';
 
+const prisma = new PrismaClient();
+
 const cookieOptions = {
   httpOnly: true,
   path: '/',
-  sameSite: 'lax' as const
+  sameSite: 'lax' as const,
 };
 
 export async function GET() {
   if (isHostedPackagingDisabled()) {
     return NextResponse.json(
       { id: '', error: HOSTED_PACKAGING_ERROR },
-      { status: 503 }
+      { status: 503 },
     );
   }
 
@@ -35,7 +38,7 @@ export async function GET() {
     response.cookies.set({
       name: CORE_SESSION_COOKIE,
       value: id,
-      ...cookieOptions
+      ...cookieOptions,
     });
   }
 
@@ -47,7 +50,9 @@ export async function DELETE() {
   const id = jar.get(CORE_SESSION_COOKIE)?.value ?? null;
 
   if (id) {
-    await destroyBuildArtifacts(id);
+    await prisma.cursorBuild.deleteMany({
+      where: { id },
+    });
   }
 
   const response = NextResponse.json({ id });
