@@ -4,7 +4,6 @@ import React, { useEffect, useRef, useState } from 'react';
 
 import { COLORS_MASK as mask, WATCH_COLORS } from '@root/configs';
 
-import { CoreApi } from '@utils/core';
 import { fetchX } from '@utils/fetchX';
 
 import { DownloadSubButtons } from './sub-buttons';
@@ -15,7 +14,6 @@ import type { Platform, Type } from '@prisma/client';
 import { AddDownloadData } from '@services/download';
 import type { Color, ErrorLogs, SVG } from 'bibata/app';
 import type { AuthToken } from 'bibata/core-api/types';
-import type { DownloadFile } from 'bibata/core-api/responses';
 
 type Props = {
   disabled?: boolean;
@@ -31,9 +29,9 @@ type Props = {
   };
 };
 
-type ProcessOptions = {
-  platform: Platform;
-  size: number;
+type ProcessedCursor = {
+  name: string;
+  frames: string[];
 };
 
 export const DownloadButton: React.FC<Props> = (props) => {
@@ -52,13 +50,8 @@ export const DownloadButton: React.FC<Props> = (props) => {
 
   const serializeError = (error: unknown) => {
     if (error instanceof Error) {
-      return {
-        name: error.name,
-        message: error.message,
-        stack: error.stack
-      };
+      return { name: error.name, message: error.message, stack: error.stack };
     }
-
     return error;
   };
 
@@ -66,7 +59,6 @@ export const DownloadButton: React.FC<Props> = (props) => {
     if (error instanceof Error && error.message) {
       return error.message;
     }
-
     return 'Unable to prepare download. Try again.';
   };
 
@@ -76,18 +68,14 @@ export const DownloadButton: React.FC<Props> = (props) => {
     }
   };
 
-  const updateErrorLogs = (options: {
-    text: string;
-    key: string;
-    error: unknown;
-  }) => {
+  const updateErrorLogs = (options: { text: string; key: string; error: unknown }) => {
     setErrorLogs((current) => ({
       ...current,
       id,
       role,
       token,
       text: options.text,
-      [options.key]: options.error
+      [options.key]: options.error,
     }));
   };
 
@@ -98,7 +86,7 @@ export const DownloadButton: React.FC<Props> = (props) => {
     [mask.watch?.c1!]: cursorColor.watch?.c1 || WATCH_COLORS.c1,
     [mask.watch?.c2!]: cursorColor.watch?.c2 || WATCH_COLORS.c2,
     [mask.watch?.c3!]: cursorColor.watch?.c3 || WATCH_COLORS.c3,
-    [mask.watch?.c4!]: cursorColor.watch?.c4 || WATCH_COLORS.c4
+    [mask.watch?.c4!]: cursorColor.watch?.c4 || WATCH_COLORS.c4,
   });
 
   const svgToPng = async (svgData: string, targetSize: number) =>
@@ -129,7 +117,7 @@ export const DownloadButton: React.FC<Props> = (props) => {
       image.src = `data:image/svg+xml;base64,${btoa(svgData)}`;
     });
 
-  const buildUploadFrames = async (svg: SVG, targetSize: number) => {
+  const buildCursorFrames = async (svg: SVG, targetSize: number): Promise<ProcessedCursor> => {
     const colors = getSvgColors(color);
     const frames: string[] = [];
 
@@ -137,7 +125,7 @@ export const DownloadButton: React.FC<Props> = (props) => {
       const response = await fetchX(url, {
         init: { next: { revalidate: 360 } },
         revalidate: 1200,
-        group: 'bibata.svg-cache'
+        group: 'bibata.svg-cache',
       });
 
       if (!response) {
@@ -152,47 +140,15 @@ export const DownloadButton: React.FC<Props> = (props) => {
       frames.push(await svgToPng(svgData, targetSize));
     }
 
-    return frames;
+    return { name: svg.name, frames };
   };
 
-  const processSvgs = async (
-    api: CoreApi,
-    items: SVG[],
-    options: ProcessOptions
-  ) => {
-    for (const svg of items) {
-      setLoadingText(`Processing '${svg.name}' ...`);
-      const uploadFrames = await buildUploadFrames(svg, options.size);
-
-      const upload = await api.uploadImages({
-        name: svg.name,
-        frames: uploadFrames,
-        delay: 30,
-        mode: props.mode,
-        ...options
-      });
-
-      if (upload?.error) {
-        const details = Array.isArray(upload.error)
-          ? upload.error.filter(Boolean).join(' ')
-          : '';
-
-        updateErrorLogs({
-          text: details || 'Oops.. Processing Failed! Try Again.',
-          key: 'upload',
-          error: upload.error
-        });
-        return upload;
-      }
-    }
-  };
-
-  const downloadFile = (file: DownloadFile) => {
-    const url = window.URL.createObjectURL(new Blob([file.blob]));
+  const downloadFile = (blob: Blob, fileName: string) => {
+    const url = window.URL.createObjectURL(new Blob([blob]));
     const link = document.createElement('a');
 
     link.href = url;
-    link.setAttribute('download', file.name);
+    link.setAttribute('download', fileName);
 
     document.body.appendChild(link);
     link.click();
@@ -208,22 +164,18 @@ export const DownloadButton: React.FC<Props> = (props) => {
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           platform,
           type: type as Type,
           baseColor: color.base,
           outlineColor: color.outline,
-          watchBGColor: color.watch?.bg || color.base
-        } as AddDownloadData['data'])
+          watchBGColor: color.watch?.bg || color.base,
+        } as AddDownloadData['data']),
       });
     } catch (error) {
-      updateErrorLogs({
-        text: 'Unexpected Internal Error.',
-        key: 'count',
-        error
-      });
+      updateErrorLogs({ text: 'Unexpected Internal Error.', key: 'count', error });
       printError(error);
     }
   };
@@ -234,16 +186,13 @@ export const DownloadButton: React.FC<Props> = (props) => {
     setErrorLogs({ text: '' });
 
     try {
-      const api = new CoreApi();
-      await api.refreshSession(token);
+      setLoadingText('Collecting cursor frames...');
 
-      setLoadingText('Preparing Requests ...');
-      const upload = await processSvgs(api, svgs, { platform, size });
-
-      if (upload?.error) {
-        printError(upload.error);
-        await api.refreshSession(token);
-        return;
+      const cursors: ProcessedCursor[] = [];
+      for (const svg of svgs) {
+        setLoadingText(`Processing '${svg.name}' ...`);
+        const cursor = await buildCursorFrames(svg, size);
+        cursors.push(cursor);
       }
 
       if (platform === 'win') {
@@ -254,25 +203,39 @@ export const DownloadButton: React.FC<Props> = (props) => {
         setLoadingText('Packaging XCursors ...');
       }
 
-      const file = await api.download(platform, name, props.version);
+      const res = await fetch('/api/core/build', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cursors,
+          platform,
+          size,
+          delay: 30,
+          mode: props.mode,
+          name,
+          version: props.version,
+        }),
+      });
 
-      if ('blob' in file) {
-        await storeToDB(platform);
-        downloadFile(file);
+      if (res.ok) {
+        const contentDisposition = res.headers.get('Content-Disposition');
+        const fileName = contentDisposition?.split('filename=')[1]?.replace(/"/g, '') || `bibata-cursors.zip`;
+
+        const blob = await res.blob();
+        storeToDB(platform);
+        downloadFile(blob, fileName);
       } else {
-        printError(file.error);
-        updateErrorLogs({
-          text: 'Oops.. Packaging Failed! Try Again.',
-          key: 'download',
-          error: file.error || file
-        });
+        const data = await res.json().catch(() => null);
+        const errorMsg = data?.error?.join(' ') || 'Packaging failed.';
+        printError(errorMsg);
+        updateErrorLogs({ text: errorMsg, key: 'build', error: data });
       }
     } catch (error) {
       printError(error);
       updateErrorLogs({
         text: getAuthErrorText(error),
         key: 'auth',
-        error: serializeError(error)
+        error: serializeError(error),
       });
     } finally {
       setLoading(false);
@@ -297,13 +260,6 @@ export const DownloadButton: React.FC<Props> = (props) => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
-
-  useEffect(() => {
-    if (!loading && !props.lock) {
-      const api = new CoreApi();
-      api.deleteSession().catch(() => undefined);
-    }
-  }, [loading, props.lock]);
 
   const busy = loading || props.disabled;
 

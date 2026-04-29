@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
 
-import { getIndex } from '@services/download';
-
 import { DB_SEEDS, SPONSOR_API_ENDPOINT } from '@root/configs';
 
 import { Goals } from 'bibata/misc';
@@ -16,7 +14,7 @@ export async function GET() {
       total: DB_SEEDS.DOWNLOADS_PER_CENTS(
         sponsor_data.monthlySponsorshipInCents
       ),
-      count: await getIndex(),
+      count: 0,
       role: 'ANONYMOUS'
     });
   } catch (e) {
