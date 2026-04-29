@@ -465,7 +465,7 @@ export async function POST(request: NextRequest) {
       : await createZipArchive(archiveFiles);
 
     const ext = platform === 'x11' ? '.tar.gz' : '.zip';
-    const fileName = `${name}-v${version}-${platform}${ext}`;
+    const fileName = `${name.toLowerCase()}${ext}`;
 
     return new NextResponse(archiveData, {
       status: 200,
