@@ -364,7 +364,7 @@ const generateWinInstallInf = (themeName: string, cursorData: { name: string; fr
     const config = configs[cursor.name];
     if (!config?.winname) continue;
 
-    const ext = cursor.frames.length > 1 ? '.ani' : '.cur';
+    const ext = '.cur';
     const fileName = `${config.winname}${ext}`;
     const varName = role.regKey.toLowerCase();
 
@@ -454,13 +454,9 @@ export async function POST(request: NextRequest) {
       }
 
       if (platform === 'win' && config.winname) {
-        if (frames.length === 1) {
-          const curData = await createCurFile(frames[0], size, config.x ?? 0, config.y ?? 0);
-          archiveFiles.push({ name: `Cursors/${config.winname}.cur`, data: curData });
-        } else {
-          const aniData = await createAniFile(frames, size, config.x ?? 0, config.y ?? 0, delay);
-          archiveFiles.push({ name: `Cursors/${config.winname}.ani`, data: aniData });
-        }
+        const pngData = await resizePng(frames[0], size);
+        const curData = await createCurFile(frames[0], size, config.x ?? 0, config.y ?? 0);
+        archiveFiles.push({ name: `Cursors/${config.winname}.cur`, data: curData });
       }
 
       if (platform === 'x11' && config.xname) {
