@@ -2,15 +2,15 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 
 const isWindows = process.platform === 'win32';
-const pythonCandidates = isWindows ? ['py', 'python'] : ['python3', 'python'];
-const workerScript = path.join('scripts', 'core-worker.py');
+const nodeCandidates = isWindows ? ['node', 'node.exe'] : ['node'];
+const workerScript = path.join('scripts', 'core-worker.mjs');
 
 const run = (command, args) =>
   new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd: process.cwd(),
       stdio: 'inherit',
-      shell: false
+      shell: false,
     });
 
     child.once('error', reject);
@@ -28,7 +28,7 @@ const canRun = (command) =>
     const child = spawn(command, ['--version'], {
       cwd: process.cwd(),
       stdio: 'ignore',
-      shell: false
+      shell: false,
     });
 
     child.once('error', () => resolve(false));
@@ -36,23 +36,21 @@ const canRun = (command) =>
   });
 
 const main = async () => {
-  for (const python of pythonCandidates) {
-    if (!(await canRun(python))) {
+  for (const node of nodeCandidates) {
+    if (!(await canRun(node))) {
       continue;
     }
 
     try {
-      await run(python, [workerScript, 'doctor']);
+      await run(node, [workerScript, 'doctor']);
       return;
     } catch {
-      await run(python, ['-m', 'pip', 'install', '-r', 'requirements.txt']);
-      await run(python, [workerScript, 'doctor']);
-      return;
+      continue;
     }
   }
 
   throw new Error(
-    `Unable to find a Python launcher. Tried: ${pythonCandidates.join(', ')}`
+    `Unable to find a Node.js launcher. Tried: ${nodeCandidates.join(', ')}`,
   );
 };
 

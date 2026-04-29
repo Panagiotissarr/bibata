@@ -1,10 +1,8 @@
-from logging import Logger
-from pathlib import Path
-from typing import Literal
+import fs from 'node:fs';
+import path from 'node:path';
+import { Platform, DownloadParams } from './types';
 
-from core.utils.parser import DownloadParams
-
-README = """[::] Bibata Cursor
+const README = `[::] Bibata Cursor
 TLDR; This cursor set is a masterpiece of cursors available on the internet,
 hand-designed by Abdulkaiz Khatri(https://twitter.com/ful1e5).
 
@@ -25,10 +23,10 @@ https://github.com/sponsors/ful1e5
 MIT License
 
 [::] Bug Reports & Contact
-https://github.com/ful1e5/bibata/issues
-"""
+https://github.com/ful1e5/issues
+`;
 
-WIN = """
+const WIN_INSTALL = `
 [::] Installation
 1. Unzip '.zip' file
 2. Open unziped directory in Explorer, and [Right Click] on 'install.inf'.
@@ -43,56 +41,68 @@ WIN = """
 [::] Uninstallation - (ii)
 1. Go to 'Registry Editor' by typing the same in the 'start search box'.
 2. Expand 'HKEY_CURRENT_USER' folder and expand 'Control Panel' folder.
-3. Go to 'Cursors' folder and click on 'Schemes' folder - all the available custom cursors that are
+3. Go to 'Cursors'folder and click on 'Schemes' folder - all the available custom cursors that are
    installed will be listed here.
 4. [Right Click] on the name of cursor file you want to uninstall; for eg.: 'Bibata Cursors' and
    click 'Delete'.
-5. Click 'yes' when prompted."""
+5. Click 'yes' when prompted.`;
 
-X = """
+const X_INSTALL = `
 [::] Installation
-```bash
-tar -xvf Bibata.tar.gz                # extract `Bibata.tar.gz`
+\`\`\`bash
+tar -xvf Bibata.tar.gz                # extract \`Bibata.tar.gz\`
 mv Bibata-* ~/.icons/                 # Install to local users
 sudo mv Bibata-* /usr/share/icons/    # Install to all users
-```
+\`\`\`
 
 [::] Uninstallation
-```bash
+\`\`\`bash
 rm ~/.icons/Bibata-*                  # Remove from local users
 sudo rm /usr/share/icons/Bibata-*     # Remove from all users
-```"""
+\`\`\``;
 
-WIN_README = README + WIN
-X_README = README + X
+const WIN_README = README + WIN_INSTALL;
+const X_README = README + X_INSTALL;
 
+const readmeContent: Record<Platform, string> = {
+  win: WIN_README,
+  x11: X_README,
+  png: README,
+};
 
-def attach_readme(p: Path, platform: Literal["x11", "win", "png"], logger: Logger):
-    files = {"win": WIN_README, "x11": X_README, "png": README}
+export const attachReadme = (dirPath: string, platform: Platform): void => {
+  const txt = readmeContent[platform];
+  if (txt) {
+    fs.writeFileSync(path.join(dirPath, 'README.txt'), txt, 'utf8');
+  }
+};
 
-    txt = files[platform] or None
-    if txt:
-        p.joinpath("README.txt").write_text(txt)
+export const attachLicense = (dirPath: string): void => {
+  const licensePath = path.join(process.cwd(), 'LICENSE');
+  if (fs.existsSync(licensePath)) {
+    const txt = fs.readFileSync(licensePath, 'utf8');
+    fs.writeFileSync(path.join(dirPath, 'LICENSE'), txt, 'utf8');
+  }
+};
 
-
-def attach_license(p: Path, logger: Logger):
-    with open("LICENSE", "r") as f:
-        txt = f.read()
-        p.joinpath("LICENSE").write_text(txt)
-
-
-def attach_version_file(p: Path, version: str, logger: Logger):
-    p.joinpath("VERSION").write_text(version)
-
-
-def attach_files(id: str, p: Path, param: DownloadParams, logger: Logger):
-    attach_readme(p, param.platform, logger)
-    attach_license(p, logger)
-    attach_version_file(
-        p,
-        f"""ID={id}
+export const attachVersionFile = (
+  dirPath: string,
+  buildId: string,
+  params: DownloadParams,
+): void => {
+  const content = `ID=${buildId}
 Author=Abdualkaiz Khatri <kaizmandhu@gmail.com>
-Type={param.name}
-Version={param.version}""",
-        logger,
-    )
+Type=${params.name}
+Version=${params.version}`;
+  fs.writeFileSync(path.join(dirPath, 'VERSION'), content, 'utf8');
+};
+
+export const attachFiles = (
+  buildId: string,
+  dirPath: string,
+  params: DownloadParams,
+): void => {
+  attachReadme(dirPath, params.platform);
+  attachLicense(dirPath);
+  attachVersionFile(dirPath, buildId, params);
+};

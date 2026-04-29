@@ -30,6 +30,7 @@
       "@services/*": ["services/*"],
       "@styles/*": ["styles/*"],
       "@root/*": ["*"],
+      "@lib/*": ["lib/*"]
     },
   },
   "include": ["next-env.d.ts", "types/**/*.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],

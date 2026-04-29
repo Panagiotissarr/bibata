@@ -284,17 +284,17 @@ export default function HomePage() {
             </Link>
 
             <Link
-              href='https://github.com/ful1e5/clickgen'
+              href='https://github.com/lovell/sharp'
               target='_blank'
               className='library-card bg-white/[.1]'>
-              <h4 className='library-card-heading'>Clickgen</h4>
+              <h4 className='library-card-heading'>Sharp</h4>
               <p className='library-card-text'>
-                The hassle-free cursor building toolbox.
+                High-performance Node.js image processing and resizing.
               </p>
 
-              <div className='library-card-lang w-24 bg-orange-400/[.1]'>
-                <span className='circle bg-orange-300' />
-                <p className='text-xs text-orange-200'>Python</p>
+              <div className='library-card-lang w-28 bg-green-400/[.1]'>
+                <span className='circle bg-green-300' />
+                <p className='text-xs text-green-200'>Node.js</p>
               </div>
             </Link>
 
@@ -314,15 +314,15 @@ export default function HomePage() {
             </Link>
 
             <Link
-              href='https://github.com/python-pillow/Pillow'
+              href='https://github.com/archiverjs/node-archiver'
               target='_blank'
               className='library-card bg-white/[.1]'>
-              <h5 className='library-card-heading'>Pillow</h5>
-              <p className='library-card-text'>The Python Imaging Library.</p>
+              <h5 className='library-card-heading'>Archiver</h5>
+              <p className='library-card-text'>Streaming interface for archive generation.</p>
 
-              <div className='library-card-lang w-24 bg-orange-400/[.1]'>
-                <span className='circle bg-orange-300' />
-                <p className='text-xs text-orange-200'>Python</p>
+              <div className='library-card-lang w-28 bg-green-400/[.1]'>
+                <span className='circle bg-green-300' />
+                <p className='text-xs text-green-200'>Node.js</p>
               </div>
             </Link>
 
