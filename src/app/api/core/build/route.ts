@@ -157,7 +157,7 @@ const createAniFile = async (frames: Buffer[], size: number, x: number, y: numbe
 
   const framListChunks: Buffer[] = [];
   for (const cur of curFrames) {
-    const iconHeader = Buffer.alloc(4);
+    const iconHeader = Buffer.alloc(8);
     iconHeader.write('icon', 0, 'ascii');
     iconHeader.writeUInt32LE(cur.length, 4);
     framListChunks.push(iconHeader, cur);
