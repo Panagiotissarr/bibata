@@ -455,7 +455,7 @@ export async function POST(request: NextRequest) {
 
     if (platform === 'win') {
       archiveFiles.push({
-        name: 'Cursors/install.ini',
+        name: 'Cursors/install.inf',
         data: Buffer.from(generateWinInstallIni(name, cursors.map((c) => c.name)), 'utf8'),
       });
     }
