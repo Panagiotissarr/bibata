@@ -326,7 +326,7 @@ sudo rm /usr/share/icons/Bibata-*     # Remove from all users
 const WIN_README = README_TEXT + WIN_INSTALL_TEXT;
 const X_README = README_TEXT + X_INSTALL_TEXT;
 
-const generateWinInstallIni = (themeName: string, cursorNames: string[]): string => {
+const generateWinInstallIni = (themeName: string, cursorData: { name: string; frames: string[] }[]): string => {
   const lines = [
     '[Version]',
     'signature="$CHICAGO$"',
@@ -344,11 +344,11 @@ const generateWinInstallIni = (themeName: string, cursorNames: string[]): string
   const schemePaths: string[] = [];
   const seen = new Set<string>();
 
-  for (const cursorName of cursorNames) {
+  for (const { name: cursorName, frames } of cursorData) {
     const config = configs[cursorName];
     if (!config?.winname) continue;
 
-    const ext = '.ani';
+    const ext = frames.length > 1 ? '.ani' : '.cur';
     const winName = config.winname;
 
     if (!seen.has(winName)) {
@@ -456,7 +456,7 @@ export async function POST(request: NextRequest) {
     if (platform === 'win') {
       archiveFiles.push({
         name: 'Cursors/install.inf',
-        data: Buffer.from(generateWinInstallIni(name, cursors.map((c) => c.name)), 'utf8'),
+        data: Buffer.from(generateWinInstallIni(name, cursors), 'utf8'),
       });
     }
 
