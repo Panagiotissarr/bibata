@@ -364,7 +364,7 @@ const generateWinInstallInf = (themeName: string, cursorData: { name: string; fr
     const config = configs[cursor.name];
     if (!config?.winname) continue;
 
-    const ext = '.cur';
+    const ext = cursor.frames.length > 1 ? '.ani' : '.cur';
     const fileName = `${config.winname}${ext}`;
     const varName = role.regKey.toLowerCase();
 
