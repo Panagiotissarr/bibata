@@ -47,7 +47,7 @@ const configs: Record<string, CursorConfig> = {
   hand2: { x: 114, y: 18, winname: 'Link', xname: 'hand2', links: ['9d800788f1b08800ae810202380a0822', 'e29285e634086352946a0e7090d73106', 'pointer', 'pointing_hand'] },
   grabbing: { x: 128, y: 66, winname: 'Grabbing', xname: 'grabbing', links: ['closedhand', 'dnd-move', 'dnd-none', 'fcf21c00b30f7e3f83fe0dfd12e71cff'] },
   move: { winname: 'Move', xname: 'move', links: ['4498f0e0c1937ffe01fd06f973665830', '9081237383d90e509aa00f00170e968f', 'all-scroll', 'fleur', 'size_all'] },
-  wait: { winname: 'Busy', xname: 'wait', links: ['watch'] },
+  wait: { x: 128, y: 128, winname: 'Busy', xname: 'wait', links: ['watch'] },
   xterm: { winname: 'Text', xname: 'xterm', links: ['ibeam', 'text'] },
   pencil: { x: 46, y: 211, winname: 'Handwriting', xname: 'pencil', links: ['draft'] },
   crosshair: { winname: 'Cross', xname: 'crosshair' },
@@ -454,9 +454,13 @@ export async function POST(request: NextRequest) {
       }
 
       if (platform === 'win' && config.winname) {
-        const pngData = await resizePng(frames[0], size);
-        const curData = await createCurFile(frames[0], size, config.x ?? 0, config.y ?? 0);
-        archiveFiles.push({ name: `Cursors/${config.winname}.cur`, data: curData });
+        if (frames.length > 1) {
+          const aniData = await createAniFile(frames, size, config.x ?? 0, config.y ?? 0, delay);
+          archiveFiles.push({ name: `Cursors/${config.winname}.ani`, data: aniData });
+        } else {
+          const curData = await createCurFile(frames[0], size, config.x ?? 0, config.y ?? 0);
+          archiveFiles.push({ name: `Cursors/${config.winname}.cur`, data: curData });
+        }
       }
 
       if (platform === 'x11' && config.xname) {
