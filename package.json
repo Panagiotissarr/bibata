@@ -21,7 +21,8 @@
     "prebuild": "node -p \"'export const LIB_VERSION = ' + JSON.stringify(require('./package.json').version) + ';'\" > src/version.ts",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "tsc -p tests/tsconfig.json && node --test .cache/cursor-tests/tests/*.test.js"
   },
   "dependencies": {
     "@babel/runtime": "^7.20.0",

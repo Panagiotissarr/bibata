@@ -36,6 +36,25 @@ To run bibata localy you will need to do the following
 
 Now you should be able to vist `http://localhost:3000` in your browser
 
+## Testing Windows cursor downloads
+
+```sh
+npm test
+npm run build
+```
+
+The cursor tests validate CUR bitmap data, transparency, scaled hotspots, ANI
+frame counts/order and timing, including the bundled Busy and Working animations
+for all four styles. Windows files are generated entirely in Node using `sharp`;
+no Python or external cursor converter is required on Vercel.
+
+After deploying encoder changes, download a **new** Windows ZIP (existing `.ani`
+files are not updated automatically). Extract it and select `Cursors/Busy.ani`
+for **Busy** and `Cursors/Work.ani` for **Working in Background** in Windows Mouse
+Properties → Pointers, then click Apply. Check that both animate and that the
+pointer hotspot stays aligned. Test both left- and right-handed styles. Browser
+previews and Explorer thumbnails are not a substitute for this Windows check.
+
 ## Bibata
 
 TLDR; This cursor set is a masterpiece of cursors available on the internet, hand-designed by [Abdulkaiz Khatri](https://github.com/ful1e5).

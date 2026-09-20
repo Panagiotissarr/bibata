@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import archiver from 'archiver';
 import sharp from 'sharp';
 
+import { createAniFile, createCurFile } from '@utils/windows-cursor';
+
 export const runtime = 'nodejs';
 
 type CursorFrame = {
@@ -26,13 +28,6 @@ type CursorConfig = {
   winname?: string;
   xname?: string;
   links?: string[];
-};
-
-const MASTER_CURSOR_SIZE = 256;
-
-const scaleHotspot = (value: number, size: number): number => {
-  const scaled = Math.round((value / MASTER_CURSOR_SIZE) * size);
-  return Math.max(0, Math.min(size - 1, scaled));
 };
 
 const configs: Record<string, CursorConfig> = {
@@ -107,100 +102,6 @@ const rconfigs: Record<string, CursorConfig> = {
   'pointer-move': { x: 207, y: 24, xname: 'pointer-move' },
   person: { x: 207, y: 24, winname: 'Person' },
   pin: { x: 207, y: 24, winname: 'Pin' },
-};
-
-const createCurFile = async (frame: Buffer, size: number, x: number, y: number): Promise<Buffer> => {
-  const pngData = await resizePng(frame, size);
-
-  const header = Buffer.alloc(6);
-  header.writeUInt16LE(0, 0);
-  header.writeUInt16LE(2, 2);
-  header.writeUInt16LE(1, 4);
-
-  const entry = Buffer.alloc(16);
-  entry.writeUInt8(size >= 256 ? 0 : size, 0);
-  entry.writeUInt8(size >= 256 ? 0 : size, 1);
-  entry.writeUInt8(0, 2);
-  entry.writeUInt8(0, 3);
-  entry.writeUInt16LE(x, 4);
-  entry.writeUInt16LE(y, 5);
-  entry.writeUInt32LE(pngData.length, 8);
-  entry.writeUInt32LE(22, 12);
-
-  return Buffer.concat([header, entry, pngData]);
-};
-
-const riffPad = (buf: Buffer): Buffer => {
-  if (buf.length % 2 !== 0) {
-    return Buffer.concat([buf, Buffer.alloc(1)]);
-  }
-  return buf;
-};
-
-const writeChunk = (id: string, data: Buffer): Buffer => {
-  const header = Buffer.alloc(8);
-  header.write(id.slice(0, 4).padEnd(4, ' '), 0, 'ascii');
-  header.writeUInt32LE(data.length, 4);
-  return Buffer.concat([header, riffPad(data)]);
-};
-
-const writeList = (type: string, content: Buffer): Buffer => {
-  const typeBuf = Buffer.alloc(4);
-  typeBuf.write(type.slice(0, 4).padEnd(4, ' '), 0, 'ascii');
-  const inner = Buffer.concat([typeBuf, riffPad(content)]);
-  return writeChunk('LIST', inner);
-};
-
-const createAniFile = async (frames: Buffer[], size: number, x: number, y: number, delay: number): Promise<Buffer> => {
-  const curFiles = await Promise.all(frames.map((f) => createCurFile(f, size, x, y)));
-
-  const jiffies = Math.round(delay / (1000 / 60));
-
-  const rateTable = Buffer.alloc(4 * frames.length);
-  for (let i = 0; i < frames.length; i++) {
-    rateTable.writeUInt32LE(jiffies, i * 4);
-  }
-
-  const anihHeader = Buffer.alloc(36);
-  anihHeader.writeUInt32LE(36, 0);
-  anihHeader.writeUInt32LE(frames.length, 4);
-  anihHeader.writeUInt32LE(frames.length, 8);
-  anihHeader.writeUInt32LE(size, 12);
-  anihHeader.writeUInt32LE(size, 16);
-  anihHeader.writeUInt32LE(0, 20);
-  anihHeader.writeUInt32LE(0, 24);
-  anihHeader.writeUInt32LE(jiffies, 28);
-  anihHeader.writeUInt32LE(0x00000001, 32);
-
-  const framParts: Buffer[] = [];
-  for (const cur of curFiles) {
-    framParts.push(writeChunk('icon', cur));
-  }
-  const framList = writeList('fram', Buffer.concat(framParts));
-
-  const anihChunk = writeChunk('anih', anihHeader);
-  const rateChunk = writeChunk('rate', rateTable);
-
-  const inamData = Buffer.concat([Buffer.from('Bibata Cursor', 'utf8'), Buffer.alloc(1)]);
-  const inamChunk = writeChunk('INAM', inamData);
-  const infoList = writeList('INFO', inamChunk);
-
-  const riffType = Buffer.alloc(4);
-  riffType.write('ACON', 0, 'ascii');
-
-  const content = Buffer.concat([
-    riffType,
-    infoList,
-    anihChunk,
-    rateChunk,
-    framList,
-  ]);
-
-  const riffHeader = Buffer.alloc(8);
-  riffHeader.write('RIFF', 0, 'ascii');
-  riffHeader.writeUInt32LE(content.length, 4);
-
-  return Buffer.concat([riffHeader, riffPad(content)]);
 };
 
 const resizePng = async (frame: Buffer, size: number): Promise<Buffer> => {
