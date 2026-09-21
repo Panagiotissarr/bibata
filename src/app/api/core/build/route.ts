@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import archiver from 'archiver';
 import sharp from 'sharp';
 
-import { createAniFile, createCurFile } from '@utils/windows-cursor';
+import { createAniFile, createCurFile } from '../../../../utils/windows-cursor';
 
 export const runtime = 'nodejs';
 
@@ -356,10 +356,10 @@ export async function POST(request: NextRequest) {
 
       if (platform === 'win' && config.winname) {
         if (frames.length > 1) {
-          const aniData = await createAniFile(frames, size, config.x ?? 0, config.y ?? 0, delay);
+          const aniData = await createAniFile(frames, size, config.x, config.y, delay);
           archiveFiles.push({ name: `Cursors/${config.winname}.ani`, data: aniData });
         } else {
-          const curData = await createCurFile(frames[0], size, config.x ?? 0, config.y ?? 0);
+          const curData = await createCurFile(frames[0], size, config.x, config.y);
           archiveFiles.push({ name: `Cursors/${config.winname}.cur`, data: curData });
         }
       }

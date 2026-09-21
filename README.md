@@ -62,9 +62,11 @@ file's canvas. Windows downloads pad the artwork on the right and bottom to the
 next standard canvas size (32, 48, 64, 96, 128 or 256px), following
 [clickgen's canvas-padding policy](https://github.com/ful1e5/clickgen/blob/main/src/clickgen/writer/windows.py).
 For example, selecting 24px produces 24px artwork inside a transparent 32px
-canvas, **without enlarging the artwork**. Hotspots are scaled to the artwork,
-not the padded canvas. The same rule applies to every ANI frame; PNG downloads
-are unchanged.
+canvas, **without enlarging the artwork**. Missing hotspot coordinates default
+to the center of the 256px source artwork, (128, 128), without replacing explicit
+overrides (including zero). Hotspots are then scaled to the selected artwork
+size, not the padded canvas: a centered 24px cursor uses (12, 12), not (16, 16).
+The same rule applies to every ANI frame; PNG downloads are unchanged.
 
 Without this padding, loading a 24px cursor at a 32px Windows system cursor size
 would stretch the artwork by 33%. Windows display scaling and pointer-size

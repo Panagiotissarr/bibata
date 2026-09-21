@@ -8,10 +8,14 @@ const MASTER_CURSOR_SIZE = 256;
 // https://github.com/ful1e5/clickgen/blob/main/src/clickgen/writer/windows.py
 const WINDOWS_CANVAS_SIZES = [32, 48, 64, 96, 128, 256];
 
-const scaleHotspot = (value: number, size: number): number =>
-  Math.max(0, Math.min(size - 1, Math.round(value * size / MASTER_CURSOR_SIZE)));
+const scaleHotspot = (value: number | undefined, size: number): number => {
+  // Default each missing axis to the center of the 256px source artwork.
+  // Resolve this before scaling to the artwork size, not the padded canvas.
+  const coordinate = value ?? MASTER_CURSOR_SIZE / 2;
+  return Math.max(0, Math.min(size - 1, Math.round(coordinate * size / MASTER_CURSOR_SIZE)));
+};
 
-export const createCurFile = async (frame: Buffer, size: number, x: number, y: number): Promise<Buffer> => {
+export const createCurFile = async (frame: Buffer, size: number, x?: number, y?: number): Promise<Buffer> => {
   if (!Number.isInteger(size) || size < 1 || size > 256) {
     throw new RangeError('Windows cursor size must be an integer between 1 and 256.');
   }
@@ -101,7 +105,13 @@ const writeList = (type: string, content: Buffer): Buffer => {
   return writeChunk('LIST', inner);
 };
 
-export const createAniFile = async (frames: Buffer[], size: number, x: number, y: number, delay: number): Promise<Buffer> => {
+export const createAniFile = async (
+  frames: Buffer[],
+  size: number,
+  x: number | undefined,
+  y: number | undefined,
+  delay: number,
+): Promise<Buffer> => {
   const curFiles = await Promise.all(frames.map((f) => createCurFile(f, size, x, y)));
 
   const jiffies = Math.max(1, Math.round(delay * 60 / 1000));
