@@ -2,8 +2,11 @@ import assert from 'node:assert/strict';
 import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { test } from 'node:test';
+import { inflateRawSync } from 'node:zlib';
+import { NextRequest } from 'next/server';
 import sharp from 'sharp';
 
+import { POST } from '../src/app/api/core/build/route';
 import { createAniFile, createCurFile } from '../src/utils/windows-cursor';
 
 // Parse the file independently of the writer, including RIFF padding/bounds.
@@ -74,6 +77,33 @@ const parseCur = (file: Buffer, size: number, x: number, y: number) => {
   return { canvasSize, pixels: dib.subarray(40, 40 + canvasSize * canvasSize * 4), mask: dib.subarray(40 + canvasSize * canvasSize * 4) };
 };
 
+// Read sizes from the ZIP central directory: archiver streams data descriptors.
+const zipEntries = (file: Buffer) => {
+  const end = file.length - 22;
+  assert.equal(file.readUInt32LE(end), 0x06054b50);
+  assert.equal(file.readUInt16LE(end + 20), 0, 'no ZIP comment');
+  const entries = new Map<string, Buffer>();
+  let offset = file.readUInt32LE(end + 16);
+  for (let i = 0; i < file.readUInt16LE(end + 10); i++) {
+    assert.equal(file.readUInt32LE(offset), 0x02014b50);
+    const method = file.readUInt16LE(offset + 10);
+    const compressedSize = file.readUInt32LE(offset + 20);
+    const nameLength = file.readUInt16LE(offset + 28);
+    const name = file.toString('utf8', offset + 46, offset + 46 + nameLength);
+    const localOffset = file.readUInt32LE(offset + 42);
+    assert.equal(file.readUInt32LE(localOffset), 0x04034b50);
+    const start = localOffset + 30 + file.readUInt16LE(localOffset + 26) + file.readUInt16LE(localOffset + 28);
+    const compressed = file.subarray(start, start + compressedSize);
+    assert.ok(method === 0 || method === 8, 'stored or deflated ZIP entry');
+    const data = method === 8 ? inflateRawSync(compressed) : compressed;
+    assert.equal(data.length, file.readUInt32LE(offset + 24));
+    entries.set(name, data);
+    offset += 46 + nameLength + file.readUInt16LE(offset + 30) + file.readUInt16LE(offset + 32);
+  }
+  assert.equal(offset, end);
+  return entries;
+};
+
 const solidPng = (r: number, g: number, b: number) => sharp({
   create: { width: 4, height: 4, channels: 4, background: { r, g, b, alpha: 1 } }
 }).png().toBuffer();
@@ -104,6 +134,42 @@ test('CUR scales independent X/Y hotspots at every supported size', async () => 
   for (const size of [16, 20, 22, 24, 28, 32, 40, 48, 56, 64, 72, 80, 88, 96, 128, 256]) {
     for (const [x, y] of [[55, 17], [197, 24], [128, 128], [-10, 300]]) {
       parseCur(await createCurFile(png, size, x, y), size, x, y);
+    }
+  }
+});
+
+test('missing hotspots default to the source center before scaling CUR and every ANI frame', async () => {
+  const source = [await solidPng(255, 0, 0), await solidPng(0, 255, 0)];
+  const cases = [
+    [1, 0], [16, 8], [22, 11], [24, 12], [28, 14], [32, 16], [33, 17],
+    [40, 20], [56, 28], [64, 32], [80, 40], [128, 64], [256, 128],
+  ];
+  for (const [size, expected] of cases) {
+    const { frames } = parseAni(await createAniFile(source, size, undefined, undefined, 30));
+    assert.equal(frames.length, source.length);
+    for (let i = 0; i < frames.length; i++) {
+      parseCur(frames[i], size, 128, 128);
+      assert.equal(frames[i].readUInt16LE(10), expected);
+      assert.equal(frames[i].readUInt16LE(12), expected);
+      assert.deepEqual(frames[i], await createCurFile(source[i], size));
+    }
+  }
+});
+
+test('hotspot defaults are per-axis and preserve explicit overrides, including zero', async () => {
+  const source = [await solidPng(255, 0, 0), await solidPng(0, 255, 0)];
+  const cases = [
+    [0, undefined, 0, 12], [undefined, 0, 12, 0],
+    [55, undefined, 5, 12], [undefined, 17, 12, 2],
+    [0, 0, 0, 0], [55, 17, 5, 2], [197, 24, 18, 2],
+    [207, 24, 19, 2], [46, 211, 4, 20],
+  ] as const;
+  for (const [x, y, expectedX, expectedY] of cases) {
+    const { frames } = parseAni(await createAniFile(source, 24, x, y, 30));
+    for (let i = 0; i < frames.length; i++) {
+      assert.equal(frames[i].readUInt16LE(10), expectedX);
+      assert.equal(frames[i].readUInt16LE(12), expectedY);
+      assert.deepEqual(frames[i], await createCurFile(source[i], 24, x, y));
     }
   }
 });
@@ -182,6 +248,48 @@ test('static and animated cursors use identical padding and artwork-scaled hotsp
     }
   }
 });
+
+for (const mode of ['left', 'right'] as const) {
+  for (const frameCount of [1, 2]) {
+    const ext = frameCount === 1 ? 'cur' : 'ani';
+    test(`${mode}-handed Windows ZIP: ${ext} hotspots use centered defaults and explicit overrides`, async () => {
+      const source = (await Promise.all([solidPng(255, 0, 0), solidPng(0, 255, 0)])).slice(0, frameCount);
+      const cursors = [
+        ...[
+          ['crosshair', 'Cross'], ['move', 'Move'], ['xterm', 'Text'],
+          ['sb_h_double_arrow', 'Horz'], ['sb_v_double_arrow', 'Vert'],
+          ['bd_double_arrow', 'Dgn1'], ['fd_double_arrow', 'Dgn2'],
+        ].map(([name, winname]) => ({ name, winname, x: 128, y: 128 })),
+        { name: 'left_ptr', winname: 'Pointer', x: mode === 'right' ? 207 : 55, y: mode === 'right' ? 24 : 17 },
+        { name: 'left_ptr_watch', winname: 'Work', x: mode === 'right' ? 197 : 55, y: mode === 'right' ? 24 : 17 },
+        { name: 'right_ptr', winname: 'Alternate', x: mode === 'right' ? 55 : 204, y: 17 },
+        { name: 'pencil', winname: 'Handwriting', x: 46, y: 211 },
+        { name: 'hand2', winname: 'Link', x: 114, y: 18 },
+      ];
+      // 24px artwork has a 32px canvas: centered hotspots must be 12, not 16.
+      for (const size of [24, 64]) {
+        const response = await POST(new NextRequest('https://bibata.test/api/core/build', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            cursors: cursors.map(({ name }) => ({ name, frames: source.map((frame) => frame.toString('base64')) })),
+            platform: 'win', size, delay: 30, mode, name: 'Hotspot regression', version: '1.0',
+          }),
+        }));
+        assert.equal(response.status, 200);
+        assert.equal(response.headers.get('Content-Type'), 'application/zip');
+        const entries = zipEntries(Buffer.from(await response.arrayBuffer()));
+        for (const { winname, x, y } of cursors) {
+          const file = entries.get(`Cursors/${winname}.${ext}`);
+          assert.ok(file, `${winname}.${ext} is included`);
+          const frames = frameCount === 1 ? [file] : parseAni(file).frames;
+          assert.equal(frames.length, frameCount);
+          for (const frame of frames) parseCur(frame, size, x, y);
+        }
+      }
+    });
+  }
+}
 
 test('invalid Windows sizes fail before allocating a canvas', async () => {
   const png = await solidPng(0, 0, 0);
