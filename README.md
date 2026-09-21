@@ -55,6 +55,22 @@ Properties → Pointers, then click Apply. Check that both animate and that the
 pointer hotspot stays aligned. Test both left- and right-handed styles. Browser
 previews and Explorer thumbnails are not a substitute for this Windows check.
 
+### Windows artwork size vs. canvas size
+
+The Studio size is the size of the rendered artwork, not necessarily the CUR
+file's canvas. Windows downloads pad the artwork on the right and bottom to the
+next standard canvas size (32, 48, 64, 96, 128 or 256px), following
+[clickgen's canvas-padding policy](https://github.com/ful1e5/clickgen/blob/main/src/clickgen/writer/windows.py).
+For example, selecting 24px produces 24px artwork inside a transparent 32px
+canvas, **without enlarging the artwork**. Hotspots are scaled to the artwork,
+not the padded canvas. The same rule applies to every ANI frame; PNG downloads
+are unchanged.
+
+Without this padding, loading a 24px cursor at a 32px Windows system cursor size
+would stretch the artwork by 33%. Windows display scaling and pointer-size
+settings can still scale the final cursor. This restores the custom-size padding
+policy; it does not reproduce upstream's entire multi-resolution Regular preset.
+
 ## Bibata
 
 TLDR; This cursor set is a masterpiece of cursors available on the internet, hand-designed by [Abdulkaiz Khatri](https://github.com/ful1e5).

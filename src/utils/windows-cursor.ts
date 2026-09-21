@@ -2,27 +2,46 @@ import sharp from 'sharp';
 
 const MASTER_CURSOR_SIZE = 256;
 
+// Windows loads cursors at system-defined canvas sizes. Keep the requested
+// artwork size inside the next standard canvas rather than letting Windows
+// stretch a small image to fill it. This mirrors clickgen's re_canvas policy:
+// https://github.com/ful1e5/clickgen/blob/main/src/clickgen/writer/windows.py
+const WINDOWS_CANVAS_SIZES = [32, 48, 64, 96, 128, 256];
+
 const scaleHotspot = (value: number, size: number): number =>
   Math.max(0, Math.min(size - 1, Math.round(value * size / MASTER_CURSOR_SIZE)));
 
 export const createCurFile = async (frame: Buffer, size: number, x: number, y: number): Promise<Buffer> => {
+  if (!Number.isInteger(size) || size < 1 || size > 256) {
+    throw new RangeError('Windows cursor size must be an integer between 1 and 256.');
+  }
+  const canvasSize = WINDOWS_CANVAS_SIZES.find((value) => value >= size)!;
+
   // ANI frames need the classic DIB form of CUR rather than PNG-compressed
   // images. Use the same encoder for standalone cursors for compatibility.
   const rgba = await sharp(frame).resize(size, size, {
     fit: 'contain',
     background: { r: 0, g: 0, b: 0, alpha: 0 },
-  }).toColourspace('srgb').ensureAlpha().raw().toBuffer();
+  }).toColourspace('srgb').ensureAlpha().extend({
+    // Pad on the right/bottom only, just like clickgen. Centering would move
+    // the artwork and require shifting its hotspot; resizing would enlarge it.
+    top: 0,
+    left: 0,
+    right: canvasSize - size,
+    bottom: canvasSize - size,
+    background: { r: 0, g: 0, b: 0, alpha: 0 },
+  }).raw().toBuffer();
 
-  const pixels = Buffer.alloc(size * size * 4);
+  const pixels = Buffer.alloc(canvasSize * canvasSize * 4);
   // The 1-bit AND mask has scanlines padded to a multiple of four bytes.
-  const maskStride = Math.ceil(size / 32) * 4;
-  const mask = Buffer.alloc(maskStride * size);
+  const maskStride = Math.ceil(canvasSize / 32) * 4;
+  const mask = Buffer.alloc(maskStride * canvasSize);
 
-  for (let row = 0; row < size; row++) {
-    for (let col = 0; col < size; col++) {
-      const source = (row * size + col) * 4;
-      const bottomUpRow = size - 1 - row;
-      const target = (bottomUpRow * size + col) * 4;
+  for (let row = 0; row < canvasSize; row++) {
+    for (let col = 0; col < canvasSize; col++) {
+      const source = (row * canvasSize + col) * 4;
+      const bottomUpRow = canvasSize - 1 - row;
+      const target = (bottomUpRow * canvasSize + col) * 4;
       // DIB scanlines run bottom-up and store BGRA, not RGBA. Keep alpha
       // intact so antialiased edges render correctly on any background.
       pixels[target] = rgba[source + 2];
@@ -37,8 +56,8 @@ export const createCurFile = async (frame: Buffer, size: number, x: number, y: n
 
   const bitmapHeader = Buffer.alloc(40); // BITMAPINFOHEADER
   bitmapHeader.writeUInt32LE(40, 0);
-  bitmapHeader.writeInt32LE(size, 4);
-  bitmapHeader.writeInt32LE(size * 2, 8); // XOR bitmap + AND mask
+  bitmapHeader.writeInt32LE(canvasSize, 4);
+  bitmapHeader.writeInt32LE(canvasSize * 2, 8); // XOR bitmap + AND mask
   bitmapHeader.writeUInt16LE(1, 12); // planes
   bitmapHeader.writeUInt16LE(32, 14); // bits per pixel, BI_RGB (uncompressed)
   bitmapHeader.writeUInt32LE(pixels.length + mask.length, 20);
@@ -49,10 +68,10 @@ export const createCurFile = async (frame: Buffer, size: number, x: number, y: n
   header.writeUInt16LE(1, 4);
 
   const entry = Buffer.alloc(16);
-  entry.writeUInt8(size >= 256 ? 0 : size, 0);
-  entry.writeUInt8(size >= 256 ? 0 : size, 1);
+  entry.writeUInt8(canvasSize === 256 ? 0 : canvasSize, 0);
+  entry.writeUInt8(canvasSize === 256 ? 0 : canvasSize, 1);
   // These are separate WORDs at offsets 4 and 6. Config hotspots refer to
-  // the original 256px artwork, so scale them to the downloaded cursor size.
+  // the original 256px artwork, so scale them to the artwork, NOT the canvas.
   entry.writeUInt16LE(scaleHotspot(x, size), 4);
   entry.writeUInt16LE(scaleHotspot(y, size), 6);
   entry.writeUInt32LE(image.length, 8);
